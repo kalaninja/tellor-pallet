@@ -616,9 +616,10 @@ pub mod pallet {
 						Pallet::<T>::index() as u8,
 						T::RemoteXCMWeightToFee::get(),
 						T::Decimals::get(),
-						T::RemoteXcmFeeLocation::get().encode())
-						.try_into()
-						.map_err(|_| Error::<T>::MaxEthereumXcmInputSizeExceeded)?,
+						T::RemoteXcmFeeLocation::get(),
+					)
+					.try_into()
+					.map_err(|_| Error::<T>::MaxEthereumXcmInputSizeExceeded)?,
 					GAS_LIMIT,
 				),
 				GAS_LIMIT,

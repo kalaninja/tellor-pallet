@@ -14,25 +14,32 @@
 // You should have received a copy of the GNU General Public License
 // along with Tellor. If not, see <http://www.gnu.org/licenses/>.
 
-use codec::Encode;
-use xcm::v1::MultiLocation;
 use super::*;
+use codec::Encode;
+use ethabi::Token;
+use xcm::latest::MultiLocation;
 
-
-
-pub(crate) fn register(para_id: ParaId,
-					   pallet_index: u8,
-					   weight_to_fee: u128,
-					   decimals: u8,
-					   fee_location: Vec<u8>
+pub(crate) fn register(
+	para_id: ParaId,
+	pallet_index: u8,
+	weight_to_fee: u128,
+	decimals: u8,
+	fee_location: MultiLocation,
 ) -> Vec<u8> {
 	call(
-		&[20, 1, 238, 43],
-		encode(&vec![Token::Uint(para_id.into()),
-					 Token::Uint(pallet_index.into()),
-					 Token::Uint(weight_to_fee.into()),
-					 Token::Uint(decimals.into()),
-					 Token::Bytes(fee_location.encode())]),
+		&[160, 223, 109, 227],
+		encode(&vec![
+			Token::Uint(para_id.into()),
+			Token::Uint(pallet_index.into()),
+			Token::Uint(weight_to_fee.into()),
+			Token::Uint(decimals.into()),
+			Token::Tuple(vec![
+				Token::Uint(fee_location.parents.into()),
+				Token::Array(
+					fee_location.interior.iter().map(|j| Token::Bytes(j.encode())).collect(),
+				),
+			]),
+		]),
 	)
 }
 
@@ -42,23 +49,28 @@ pub(crate) fn deregister() -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-	use codec::Encode;
 	use super::super::tests::*;
+	use codec::Encode;
 	use ethabi::{Function, ParamType, Token};
-	use frame_support::traits::DefensiveMax;
 	use xcm::latest::prelude::*;
 
 	#[allow(deprecated)]
 	fn register() -> Function {
-		// register(uint32,uint8)
+		// register(uint32,uint8,uint256,uint8,(uint8,bytes[]))
 		Function {
 			name: "register".to_string(),
 			inputs: vec![
 				param("_paraId", ParamType::Uint(32)),
 				param("_palletIndex", ParamType::Uint(8)),
-				param("_weightToFee", ParamType::Uint(128)),
+				param("_weightToFee", ParamType::Uint(256)),
 				param("_decimals", ParamType::Uint(8)),
-				param("_feeLocation", ParamType::Bytes),
+				param(
+					"_feeLocation",
+					ParamType::Tuple(vec![
+						ParamType::Uint(8), // parents
+						ParamType::Array(Box::new(ParamType::Bytes)), // interior
+					]),
+				),
 			],
 			outputs: vec![],
 			constant: None,
@@ -84,13 +96,24 @@ mod tests {
 
 		assert_eq!(
 			register()
-				.encode_input(&vec![Token::Uint(para_id.into()),
-									Token::Uint(pallet_index.into()),
-									Token::Uint(weight_to_fee.into()),
-									Token::Uint(decimals.into()),
-									Token::Bytes(fee_location.encode())])
+				.encode_input(&vec![
+					Token::Uint(para_id.into()),
+					Token::Uint(pallet_index.into()),
+					Token::Uint(weight_to_fee.into()),
+					Token::Uint(decimals.into()),
+					Token::Tuple(vec![
+						Token::Uint(fee_location.parents.into()),
+						Token::Array(
+							fee_location
+								.interior
+								.iter()
+								.map(|j| Token::Bytes(j.encode()))
+								.collect()
+						)
+					])
+				])
 				.unwrap()[..],
-			super::register(para_id, pallet_index, weight_to_fee, decimals, fee_location.encode())[..]
+			super::register(para_id, pallet_index, weight_to_fee, decimals, fee_location)[..]
 		)
 	}
 
