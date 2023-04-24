@@ -114,8 +114,8 @@ impl tellor::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type Balance = Balance;
 	type Decimals = ();
-	type RemoteXCMWeightToFee = ();
 	type Fee = ();
+	type FeeLocation = ();
 	type Governance = ();
 	type GovernanceOrigin = EnsureGovernance;
 	type InitialDisputeFee = ();
@@ -144,10 +144,10 @@ impl tellor::Config for Test {
 	type Token = Balances;
 	type UpdateStakeAmountInterval = ();
 	type ValueConverter = ValueConverter;
+	type WeightToFee = ();
 	type Xcm = TestSendXcm;
 	type XcmFeesAsset = XcmFeesAsset;
 	type XcmWeightToAsset = ();
-	type RemoteXcmFeeLocation = ();
 }
 pub struct TestSendXcm;
 impl tellor::traits::SendXcm for TestSendXcm {

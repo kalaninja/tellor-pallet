@@ -113,7 +113,7 @@ pub(crate) fn deregister() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
 	use super::super::tests::*;
-	use codec::Encode;
+	use crate::contracts::registry::encode_junction;
 	use ethabi::{Function, ParamType, Token};
 	use sp_core::{bounded::WeakBoundedVec, bytes::from_hex, H160, H256};
 	use xcm::latest::prelude::*;
@@ -156,7 +156,7 @@ mod tests {
 		let pallet_index = 3;
 		let weight_to_fee = 10000;
 		let decimals = 10;
-		let fee_location = MultiLocation { parents: 0, interior: X1(PalletInstance(3)) };
+		let fee_location = MultiLocation::new(1, X1(Parachain(3000))); // fee location for execution on this parachain, from context of evm parachain
 
 		assert_eq!(
 			register()
@@ -166,14 +166,8 @@ mod tests {
 					Token::Uint(weight_to_fee.into()),
 					Token::Uint(decimals.into()),
 					Token::Tuple(vec![
-						Token::Uint(fee_location.parents.into()),
-						Token::Array(
-							fee_location
-								.interior
-								.iter()
-								.map(|j| Token::Bytes(j.encode()))
-								.collect()
-						)
+						Token::Uint(1.into()),
+						Token::Array(vec![Token::Bytes(encode_junction(Parachain(3000)))])
 					])
 				])
 				.unwrap()[..],
