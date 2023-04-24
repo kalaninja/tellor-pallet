@@ -17,7 +17,7 @@
 use super::*;
 use codec::Encode;
 use ethabi::Token;
-use xcm::latest::MultiLocation;
+use xcm::latest::{Junction, MultiLocation, NetworkId};
 
 pub(crate) fn register(
 	para_id: ParaId,
@@ -36,11 +36,74 @@ pub(crate) fn register(
 			Token::Tuple(vec![
 				Token::Uint(fee_location.parents.into()),
 				Token::Array(
-					fee_location.interior.iter().map(|j| Token::Bytes(j.encode())).collect(),
+					fee_location
+						.interior
+						.into_iter()
+						.map(|j| Token::Bytes(encode_junction(j)))
+						.collect(),
 				),
 			]),
 		]),
 	)
+}
+
+fn encode_junction(junction: Junction) -> Vec<u8> {
+	// Based on https://github.com/PureStake/moonbeam/blob/7f85ea4d5f6feb9e1f37355c8269ffebc533dd51/precompiles/utils/src/data/xcm.rs#L173
+	match junction {
+		Junction::Parachain(para_id) => {
+			let mut encoded = vec![0];
+			encoded.extend(para_id.to_be_bytes());
+			encoded
+		},
+		Junction::AccountId32 { network, id } => {
+			let mut encoded = vec![1];
+			encoded.extend(id);
+			encoded.extend(encode_network_id(network));
+			encoded
+		},
+		Junction::AccountIndex64 { network, index } => {
+			let mut encoded = vec![2];
+			encoded.extend(index.to_be_bytes());
+			encoded.extend(encode_network_id(network));
+			encoded
+		},
+		Junction::AccountKey20 { network, key } => {
+			let mut encoded = vec![3];
+			encoded.extend(key);
+			encoded.extend(network.encode());
+			encoded
+		},
+		Junction::PalletInstance(i) => {
+			let mut encoded = vec![4];
+			encoded.extend(i.to_be_bytes());
+			encoded
+		},
+		Junction::GeneralIndex(i) => {
+			let mut encoded = vec![5];
+			encoded.extend(i.to_be_bytes());
+			encoded
+		},
+		Junction::GeneralKey(key) => {
+			let mut encoded = vec![6];
+			encoded.extend(key.into_inner());
+			encoded
+		},
+		Junction::OnlyChild => vec![7],
+		_ => unreachable!("Junction::Plurality not supported yet"),
+	}
+}
+
+fn encode_network_id(network_id: NetworkId) -> Vec<u8> {
+	match network_id {
+		NetworkId::Any => vec![0],
+		NetworkId::Named(name) => {
+			let mut encoded = vec![1];
+			encoded.append(name.into_inner().as_mut());
+			encoded
+		},
+		NetworkId::Polkadot => vec![2],
+		NetworkId::Kusama => vec![3],
+	}
 }
 
 pub(crate) fn deregister() -> Vec<u8> {
@@ -52,6 +115,7 @@ mod tests {
 	use super::super::tests::*;
 	use codec::Encode;
 	use ethabi::{Function, ParamType, Token};
+	use sp_core::{bounded::WeakBoundedVec, bytes::from_hex, H160, H256};
 	use xcm::latest::prelude::*;
 
 	#[allow(deprecated)]
@@ -67,7 +131,7 @@ mod tests {
 				param(
 					"_feeLocation",
 					ParamType::Tuple(vec![
-						ParamType::Uint(8), // parents
+						ParamType::Uint(8),                           // parents
 						ParamType::Array(Box::new(ParamType::Bytes)), // interior
 					]),
 				),
@@ -140,5 +204,40 @@ mod tests {
 	#[test]
 	fn encodes_deregister_call() {
 		assert_eq!(deregister().encode_input(&vec![]).unwrap()[..], super::deregister()[..])
+	}
+
+	#[test]
+	fn encodes_junctions() {
+		let id = H256::random().0;
+		let key = H160::random().0;
+		let x: Vec<(Junction, Vec<u8>)> = vec![
+			(Parachain(2023), from_hex("0x00000007E7").unwrap()),
+			(
+				AccountId32 { network: Any, id },
+				from_hex(&format!("0x01{}00", hex::encode(id))).unwrap(),
+			),
+			(
+				AccountIndex64 { network: Any, index: u64::MAX },
+				from_hex(&format!("0x02{}00", hex::encode(u64::MAX.to_be_bytes()))).unwrap(),
+			),
+			(
+				AccountKey20 { network: Any, key },
+				from_hex(&format!("0x03{}00", hex::encode(key))).unwrap(),
+			),
+			(PalletInstance(3), from_hex("0x0403").unwrap()),
+			(
+				GeneralIndex(u128::MAX),
+				from_hex(&format!("0x05{}", hex::encode(u128::MAX.to_be_bytes()))).unwrap(),
+			),
+			(
+				GeneralKey(WeakBoundedVec::try_from(key.to_vec()).unwrap()),
+				from_hex(&format!("0x06{}", hex::encode(key))).unwrap(),
+			),
+			(OnlyChild, from_hex("0x07").unwrap()),
+		];
+
+		for (source, expected) in x {
+			assert_eq!(super::encode_junction(source), expected);
+		}
 	}
 }
