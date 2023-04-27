@@ -1051,8 +1051,12 @@ impl<T: Config> Pallet<T> {
 	/// # Returns
 	/// The duration since UNIX_EPOCH, in seconds.
 	pub(super) fn now() -> u64 {
-		// Use seconds to match EVM smart contracts
-		T::Time::now().as_secs()
+		if cfg!(feature = "runtime-benchmarks"){
+			T::Time::now().as_secs() + <NowOffset<T>>::get()
+		} else {
+			// Use seconds to match EVM smart contracts
+			T::Time::now().as_secs()
+		}
 	}
 
 	/// Removes a value from the oracle.
